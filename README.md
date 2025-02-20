@@ -70,13 +70,6 @@ The script standardizes all inputs into the following columns:
 - Amount in col3
 - Section headers in multiple columns
 
-## Error Handling:
---------------
-- Exits with code 1 if input file not provided
-- Exits with code 1 on processing errors
-- Skips invalid/empty rows
-- Handles missing values gracefully
-
 ## Helper Functions:
 ---------------
 **fixDate(dateStr):**
