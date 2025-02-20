@@ -4,10 +4,10 @@ A Node.js script that standardizes bank statements from different formats into a
 
 ## Usage:
 ------
-`node script2.js <input-file>`
+`node script.js <input-file>`
 
 ## Example:
-`node script2.js HDFC-Input-Case1.csv`
+`node script.js HDFC-Input-Case1.csv`
 
 ## Input & Output:
 --------------
