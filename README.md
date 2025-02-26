@@ -4,10 +4,10 @@ A Node.js script that standardizes bank statements from different formats into a
 
 ## Usage:
 ------
-`node script2.js <input-file>`
+`node script.js <input-file>`
 
 ## Example:
-`node script2.js HDFC-Input-Case1.csv`
+`node script.js HDFC-Input-Case1.csv`
 
 ## Input & Output:
 --------------
@@ -69,13 +69,6 @@ The script standardizes all inputs into the following columns:
 - Date in col2
 - Amount in col3
 - Section headers in multiple columns
-
-## Error Handling:
---------------
-- Exits with code 1 if input file not provided
-- Exits with code 1 on processing errors
-- Skips invalid/empty rows
-- Handles missing values gracefully
 
 ## Helper Functions:
 ---------------
