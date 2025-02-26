@@ -1,17 +1,45 @@
 const fs = require('fs');
 
-// fix the date 
+// fix the date stuff
 function fixDate(dateStr) {
     if (dateStr.trim() === 'Date') return '';
     
     let day, month, year;
     
+    // trim the date string
+    dateStr = dateStr.trim();
+    
     if (dateStr.includes('-')) {
-        [day, month, year] = dateStr.split('-').map(x => x.trim());
+        [part1, part2, part3] = dateStr.split('-').map(x => x.trim());
     } else if (dateStr.includes('/')) {
-        [day, month, year] = dateStr.split('/').map(x => x.trim());
+        [part1, part2, part3] = dateStr.split('/').map(x => x.trim());
     } else {
         return dateStr;
+    }
+
+    if (part3) {
+        if (part3.length === 4) {  
+            day = part1;
+            month = part2;
+            year = part3;
+        } else if (part3.length === 2) {  
+            day = part1;
+            month = part2;
+            year = part3;
+        } else if (part1.length === 4) {
+            year = part1;
+            month = part2;
+            day = part3;
+        }
+    } else {
+        return dateStr;
+    }
+
+    let monthNum = parseInt(month);
+    if (monthNum > 12) {  // if month is > 12, it's probably the day
+        let temp = day;
+        day = month;
+        month = temp;
     }
 
     // make 2 digit year into 4 digit
@@ -23,6 +51,10 @@ function fixDate(dateStr) {
     day = day.padStart(2, '0');
     month = month.padStart(2, '0');
 
+    // check final values
+    day = Math.min(Math.max(1, parseInt(day)), 31).toString().padStart(2, '0');
+    month = Math.min(Math.max(1, parseInt(month)), 12).toString().padStart(2, '0');
+    
     return `${day}-${month}-${year}`;
 }
 
@@ -58,18 +90,36 @@ function writeCSV(rows, headers, outputFile) {
     fs.writeFileSync(outputFile, headerRow + dataRows);
 }
 
+// get currency from description for international transactions
+function getCurrency(description, isInternational) {
+    if (!description || !isInternational) return '';
+
+    let words = description.trim().split(/\s+/);
+    let lastWord = words[words.length - 1];
+    
+    if (lastWord && lastWord.length === 3 && lastWord === lastWord.toUpperCase()) {
+        return lastWord;
+    }
+    return '';
+}
+
 // get location from desc
-function getLocation(description, currentSection) {
+function getLocation(description, isInternational) {
     if (!description) return '';
     
-    // remove currency stuff from end
-    let cleanDesc = description.replace(/(EUR|USD)\s*$/g, '').trim();
+    let words = description.trim().split(/\s+/);
     
-    // split into words and get last one
-    let words = cleanDesc.split(/\s+/);
-    let lastWord = words.filter(word => word.length > 0).pop();
+    // if international and last word looks like currency, remove it
+    if (isInternational && words.length > 0) {
+        let lastWord = words[words.length - 1];
+        if (lastWord.length === 3 && lastWord === lastWord.toUpperCase()) {
+            words.pop();
+        }
+    }
     
-    return lastWord ? lastWord.toLowerCase() : '';
+    // get last remaining word
+    let location = words.filter(word => word.length > 0).pop();
+    return location ? location.toLowerCase() : '';
 }
 
 // figure out which format
@@ -114,17 +164,15 @@ function processTransaction(row, format, currentSection, currentName) {
             if (!row.col2 || !row.col3) return null;
             amountData = getAmount(row.col3);
             
-            let currencyMatch = row.col1.match(/\s+(EUR|USD)\s*$/);
-
             transactionData = {
                 Date: fixDate(row.col2),
-                'Transaction Description': row.col1.replace(/(EUR|USD)\s*$/, '').trim(),
+                'Transaction Description': row.col1,
                 Debit: amountData.debit,
                 Credit: amountData.credit,
-                Currency: currencyMatch?.[1] || '',
+                Currency: currentSection === 'domestic' ? 'INR' : getCurrency(row.col1, true),
                 CardName: currentName,
                 Transaction: currentSection,
-                Location: getLocation(row.col1, currentSection)
+                Location: getLocation(row.col1, currentSection === 'international')
             };
             break;
 
@@ -132,14 +180,13 @@ function processTransaction(row, format, currentSection, currentName) {
             if (!row.col4) return null;
             transactionData = {
                 Date: fixDate(row.col1),
-                'Transaction Description': row.col4.replace(/\s+(EUR|USD)\s*$/, '').trim(),
+                'Transaction Description': row.col4,
                 Debit: row.col2 ? parseFloat(row.col2.replace(/,/g, '')).toFixed(2) || '' : '',
                 Credit: row.col3 ? parseFloat(row.col3.replace(/,/g, '')).toFixed(2) || '' : '',
-                Currency: currentSection === 'international' ? 
-                    (row.col4.match(/\s+(EUR|USD)\s*$/)?.[1] || '') : '',
+                Currency: currentSection === 'domestic' ? 'INR' : getCurrency(row.col4, true),
                 CardName: currentName,
                 Transaction: currentSection,
-                Location: getLocation(row.col4, currentSection)
+                Location: getLocation(row.col4, currentSection === 'international')
             };
             break;
 
@@ -148,14 +195,13 @@ function processTransaction(row, format, currentSection, currentName) {
             amountData = getAmount(row.col3);
             transactionData = {
                 Date: fixDate(row.col1),
-                'Transaction Description': row.col2.replace(/(EUR|USD)\s*$/, '').trim(),
+                'Transaction Description': row.col2,
                 Debit: amountData.debit,
                 Credit: amountData.credit,
-                Currency: currentSection === 'international' ? 
-                    (row.col2.match(/(EUR|USD)\s*$/)?.[1] || '') : '',
+                Currency: currentSection === 'domestic' ? 'INR' : getCurrency(row.col2, true),
                 CardName: currentName,
                 Transaction: currentSection,
-                Location: getLocation(row.col2, currentSection)
+                Location: getLocation(row.col2, currentSection === 'international')
             };
             break;
 
@@ -166,11 +212,10 @@ function processTransaction(row, format, currentSection, currentName) {
                 'Transaction Description': row.col2.trim(),
                 Debit: row.col3 ? parseFloat(row.col3.replace(/,/g, '')).toFixed(2) || '' : '',
                 Credit: row.col4 ? parseFloat(row.col4.replace(/,/g, '')).toFixed(2) || '' : '',
-                Currency: currentSection === 'international' ? 
-                    (row.col2.match(/(EUR|USD)$/)?.[1] || '') : '',
+                Currency: currentSection === 'domestic' ? 'INR' : getCurrency(row.col2, true),
                 CardName: currentName,
                 Transaction: currentSection,
-                Location: getLocation(row.col2, currentSection)
+                Location: getLocation(row.col2, currentSection === 'international')
             };
             break;
     }
@@ -182,13 +227,12 @@ function processTransaction(row, format, currentSection, currentName) {
 function getAmount(amountStr) {
     if (!amountStr) return { debit: '', credit: '' };
     
-    let cleanAmount = amountStr.replace(/(EUR|USD)$/g, '').trim();
+    let cleanAmount = amountStr.trim();
     let isCredit = cleanAmount.toLowerCase().endsWith('cr');
     let amount = parseFloat(cleanAmount.replace(/cr$/i, '').replace(/,/g, ''));
     
     if (isNaN(amount)) return { debit: '', credit: '' };
     
-    // add .00 to amounts
     let formattedAmount = amount.toFixed(2);
     
     return {
@@ -215,7 +259,6 @@ async function standardizeStatement(inputFile, outputFile) {
 
         // check if its a section header
         if (format === 'format4') {
-            // Check for International Transactions header
             if (row.col1 === 'International Transactions' || 
                 row.col2 === 'International Transactions' || 
                 row.col3 === 'International Transactions') {
@@ -223,7 +266,6 @@ async function standardizeStatement(inputFile, outputFile) {
                 continue;
             }
             
-            // Check for Domestic Transactions header
             if (row.col1 === 'Domestic Transactions' || 
                 row.col2 === 'Domestic Transactions' || 
                 row.col3 === 'Domestic Transactions' ||
@@ -307,6 +349,5 @@ if (outputFile === inputFile) {
     outputFile = `${parts[0]}-Output.${parts[1]}`;
 }
 
-// do the thing
 standardizeStatement(inputFile, outputFile)
     .catch(() => process.exit(1));
